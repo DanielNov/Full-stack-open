@@ -3,6 +3,7 @@ import PersonForm from "./components/PersonForm.jsx";
 import Filter from "./components/Filter.jsx";
 import Persons from "./components/Persons.jsx";
 import axios from 'axios'
+import personService from './services/persons.js'
 
 const App = () => {
         const [persons, setPersons] = useState([])
@@ -11,11 +12,10 @@ const App = () => {
         const [filter, setFilter] = useState('')
 
         useEffect(() => {
-                axios
-                        .get('http://localhost:3001/persons')
-                        .then(response => {
-                                console.log('promise fulfilled')
-                                setPersons(response.data)
+                personService
+                        .getAll()
+                        .then(initialPersons => {
+                                setPersons(initialPersons)
                         })
         }, [])
 
@@ -23,14 +23,43 @@ const App = () => {
                 person.name.toLowerCase().includes(filter.toLowerCase()))
 
         const addPerson = (event) => {
-                if (persons.find(person => person.name === newName)) {
-                        alert(`${newName} is already added to phonebook`)
+                event.preventDefault()
+                const sameNamePerson = persons.find(person => person.name === newName)
+                if (sameNamePerson) {
+                        const changedPerson = { ...sameNamePerson, number: newNumber }
+                        if (window.confirm(`${newName} is already added to phonebook, replace the old number with a new one?`)) {
+                                personService
+                                        .update(changedPerson.id, changedPerson)
+                                        .then(returnedPerson => {
+                                                setPersons(persons.map(person => (person.name === newName ? returnedPerson : person)))
+                                                setNewName('')
+                                                setNumber('')
+                                        })
+                                        .catch(error => {
+                                                console.log("Failed: ", error)
+                                        })
+                        }
                 } else {
-                        event.preventDefault()
-                        console.log("button clicked")
-                        setPersons(persons.concat({ name: newName, number: newNumber, id: persons.length + 1 }))
-                        setNewName('')
+                        const personObj = {
+                                name: newName,
+                                number: newNumber
+                        }
+                        personService
+                                .create(personObj)
+                                .then(returnedPerson => {
+                                        setPersons(persons.concat(returnedPerson))
+                                        setNewName('')
+                                        setNumber('')
+                                })
                 }
+        }
+
+        const deletePerson = id => {
+                personService
+                        .deletePerson(id)
+                        .then(returnedPerson => {
+                                setPersons(persons.filter(person => person.id !== id))
+                        })
         }
 
         const handlePersonChange = (event) => {
@@ -61,7 +90,7 @@ const App = () => {
                                 handleNumberChange={handleNumberChange}
                         />
                         <h3>Numbers</h3>
-                        <Persons filtered={filtered} />
+                        <Persons filtered={filtered} deletePerson={deletePerson} />
                 </div>
         )
 }
